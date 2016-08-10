@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="stylesheet" href="fp.css">
+  <title>Maze With Us Game!</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+  <script src="final.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+   <script src="https://cdn.jsdelivr.net/phaser/2.2.2/phaser.min.js"></script>
+  <script type="text/javascript">
+         WebFontConfig = {
+           google: { families: [ 'Abel::latin' ] }
+         };
+         (function() {
+           var wf = document.createElement('script');
+           wf.src = 'https://ajax.googleapis.com/ajax/libs/webfont/1/webfont.js';
+           wf.type = 'text/javascript';
+           wf.async = 'true';
+           var s = document.getElementsByTagName('script')[0];
+           s.parentNode.insertBefore(wf, s);
+         })(); 
+      </script>
+      <link rel="stylesheet" href="fp.css">
+ 
+
+  <!-- <style>
+    div {
+   margin: 100px 200px 200px 300px;    
+    }
+
+  </style> -->
+  <script type="text/javascript">
+    var game = new Phaser.Game(640, 480, Phaser.CANVAS, 'game');
+ 
+    var PhaserGame = function (game) {
+ 
+        this.map = null;
+        this.layer = null;
+        this.car = null;
+ 
+        this.safetile = 1;
+        this.gridsize = 32;
+ 
+        this.speed = 300;
+        this.threshold = 100;
+        this.turnSpeed = 100;
+ 
+        this.marker = new Phaser.Point();
+        this.turnPoint = new Phaser.Point();
+ 
+        this.directions = [ null, null, null, null, null ];
+        this.opposites = [ Phaser.NONE, Phaser.RIGHT, Phaser.LEFT, Phaser.DOWN, Phaser.UP ];
+ 
+        this.current = Phaser.UP;
+        this.turning = Phaser.NONE;
+        self.timeout = false;
+    };
+ 
+    PhaserGame.prototype = {
+ 
+        init: function () {
+ 
+            this.physics.startSystem(Phaser.Physics.ARCADE);
+ 
+        },
+ 
+        preload: function () {
+ 
+            //  We need this because the assets are on Amazon S3
+            //  Remove the next 2 lines if running locally
+            //this.load.baseURL = 'http://files.phaser.io.s3.amazonaws.com/codingtips/issue005/';
+            //this.load.crossOrigin = 'anonymous';
+ 
+            this.load.tilemap('map', 'assets/maze.json', null, Phaser.Tilemap.TILED_JSON);
+            this.load.image('tiles', 'assets/tiles.png');
+            this.load.image('car', 'assets/heart32.png');
+            this.load.image('lvl1', 'assets/level1.jpg');
+            this.load.image('lvl2', 'assets/level2.jpg');
+            this.load.image('lvl3', 'assets/level3.jpg');
+            this.load.image('lvl4', 'assets/level4.jpg');
+            this.load.image('lvl5', 'assets/level5.jpg');
+            this.load.image('end', 'assets/endscreen.jpg');
+ 
+        },
+ 
+        create: function () {
+ 
+            this.map = this.add.tilemap('map');
+            this.map.addTilesetImage('tiles', 'tiles');
+ 
+            this.layer = this.map.createLayer('Tile Layer 1');
+ 
+            this.level = 0;
+ 
+            this.map.setCollisionBetween(3, 10000, true, this.layer);
+ 
+            this.car = this.add.sprite(48, 48, 'car');
+            this.car.anchor.set(0.5);
+ 
+            this.physics.arcade.enable(this.car);
+ 
+            this.cursors = this.input.keyboard.createCursorKeys();
+ 
+            // this.move(Phaser.DOWN);
+ 
+        },
+ 
+        checkKeys: function () {
+            console.log("HEYO")
+            if (this.cursors.left.isDown && this.current !== Phaser.LEFT)
+            {
+                this.checkDirection(Phaser.LEFT);
+            }
+            else if (this.cursors.right.isDown && this.current !== Phaser.RIGHT)
+            {
+                this.checkDirection(Phaser.RIGHT);
+            }
+            else if (this.cursors.up.isDown && this.current !== Phaser.UP)
+            {
+                this.checkDirection(Phaser.UP);
+            }
+            else if (this.cursors.down.isDown && this.current !== Phaser.DOWN)
+            {
+                this.checkDirection(Phaser.DOWN);
+            }
+            else
+            {
+                //  This forces them to hold the key down to turn the corner
+                this.turning = Phaser.NONE;
+            }
+ 
+        },
+ 
+        checkDirection: function (turnTo) {
+ 
+            if (this.turning === turnTo || this.directions[turnTo] === null || this.directions[turnTo].index !== this.safetile)
+            {
+                //  Invalid direction if they're already set to turn that way
+                //  Or there is no tile there, or the tile isn't index a floor tile
+                return;
+            }
+ 
+            //  Check if they want to turn around and can
+            if (this.current === this.opposites[turnTo])
+            {
+                this.move(turnTo);
+            }
+            else
+            {
+                this.turning = turnTo;
+ 
+                this.turnPoint.x = (this.marker.x * this.gridsize) + (this.gridsize / 2);
+                this.turnPoint.y = (this.marker.y * this.gridsize) + (this.gridsize / 2);
+            }
+ 
+        },
+ 
+        turn: function () {
+ 
+            var cx = Math.floor(this.car.x);
+            var cy = Math.floor(this.car.y);
+ 
+            //  This needs a threshold, because at high speeds you can't turn because the coordinates skip past
+            if (!this.math.fuzzyEqual(cx, this.turnPoint.x, this.threshold) || !this.math.fuzzyEqual(cy, this.turnPoint.y, this.threshold))
+            {
+                return false;
+            }
+ 
+            this.car.x = this.turnPoint.x;
+            this.car.y = this.turnPoint.y;
+ 
+            this.car.body.reset(this.turnPoint.x, this.turnPoint.y);
+ 
+            this.move(this.turning);
+ 
+            this.turning = Phaser.NONE;
+ 
+            return true;
+ 
+        },
+ 
+        move: function (direction) {
+ 
+            var speed = this.speed;
+ 
+            if (direction === Phaser.LEFT || direction === Phaser.UP)
+            {
+                speed = -speed;
+            }
+ 
+            if (direction === Phaser.LEFT || direction === Phaser.RIGHT)
+            {
+                this.car.body.velocity.x = speed;
+            }
+            else
+            {
+                this.car.body.velocity.y = speed;
+            }
+ 
+            this.add.tween(this.car).to( { angle: this.getAngle(direction) }, this.turnSpeed, "Linear", true);
+ 
+            this.current = direction;
+        },
+ 
+        getAngle: function (to) {
+ 
+            //  About-face?
+            if (this.current === this.opposites[to])
+            {
+                return "180";
+            }
+ 
+            if ((this.current === Phaser.UP && to === Phaser.LEFT) ||
+                (this.current === Phaser.DOWN && to === Phaser.RIGHT) ||
+                (this.current === Phaser.LEFT && to === Phaser.DOWN) ||
+                (this.current === Phaser.RIGHT && to === Phaser.UP))
+            {
+                return "-90";
+            }
+ 
+            return "90";
+ 
+        },
+ 
+        update: function () {
+            if (self.timeout) {
+                return;
+            }
+            if (this.car.x == 592 && this.car.y == 432) {
+                this.car.x = 48
+                this.car.y = 48
+                this.car.body.velocity.x = 0;
+                this.car.body.velocity.y = 0;
+                this.timeout = true;
+ 
+                if (this.level == 0) {
+                    setTimeout(function(i, j) {
+                        j.level++;
+                        i.destroy()
+                        j.timeout = false;
+                        j.layer = j.map.createLayer('Tile Layer 2');
+                        j.map.setCollisionBetween(3, 10000, true, j.layer);
+                        j.game.world.bringToTop(j.car);
+                        // this.move(Phaser.RIGH    T);
+                    }, 10000, this.add.sprite(0, 0, 'lvl1'), this);
+                }
+                else if (this.level == 1) {
+                    setTimeout(function(i, j) {
+                        j.level++;
+                        i.destroy()
+                        j.timeout = false;
+                        j.layer = j.map.createLayer('Tile Layer 3');
+                        j.map.setCollisionBetween(3, 10000, true, j.layer);
+                        j.game.world.bringToTop(j.car);
+                        // this.move(Phaser.RIGH    T);
+                    }, 10000, this.add.sprite(0, 0, 'lvl2'), this);
+                }
+                else if (this.level == 2) {
+                    setTimeout(function(i, j) {
+                        j.level++;
+                        i.destroy()
+                        j.timeout = false;
+                        j.layer = j.map.createLayer('Tile Layer 4');
+                        j.map.setCollisionBetween(3, 10000, true, j.layer);
+                        j.game.world.bringToTop(j.car);
+                        // this.move(Phaser.RIGH    T);
+                    }, 10000, this.add.sprite(0, 0, 'lvl3'), this);
+                }
+                else if (this.level == 3) {
+                    setTimeout(function(i, j) {
+                        j.level++;
+                        i.destroy()
+                        j.timeout = false;
+                        j.layer = j.map.createLayer('Tile Layer 5');
+                        j.map.setCollisionBetween(3, 10000, true, j.layer);
+                        j.game.world.bringToTop(j.car);
+                        // this.move(Phaser.RIGH    T);
+                    }, 10000, this.add.sprite(0, 0, 'lvl4'), this);
+                }
+                else if (this.level == 4) {
+                    setTimeout(function(i, j) {
+ 
+                        i.destroy()
+ 
+                        j.add.sprite(0, 0, 'end');
+                       
+                        // this.move(Phaser.RIGH    T);
+                    }, 10000, this.add.sprite(0, 0, 'lvl5'), this);
+                }
+            }
+ 
+         
+            this.physics.arcade.collide(this.car, this.layer);
+ 
+            this.marker.x = this.math.snapToFloor(Math.floor(this.car.x), this.gridsize) / this.gridsize;
+            this.marker.y = this.math.snapToFloor(Math.floor(this.car.y), this.gridsize) / this.gridsize;
+ 
+            //  Update our grid sensors
+            this.directions[1] = this.map.getTileLeft(this.layer.index, this.marker.x, this.marker.y);
+            this.directions[2] = this.map.getTileRight(this.layer.index, this.marker.x, this.marker.y);
+            this.directions[3] = this.map.getTileAbove(this.layer.index, this.marker.x, this.marker.y);
+            this.directions[4] = this.map.getTileBelow(this.layer.index, this.marker.x, this.marker.y);
+ 
+ 
+            this.checkKeys();
+ 
+            if (this.turning !== Phaser.NONE)
+            {
+                this.turn();
+            }
+ 
+        },
+ 
+        render: function () {
+ 
+            //  Un-comment this to see the debug drawing
+ 
+            // for (var t = 1; t < 5; t++)
+            // {
+            //     if (this.directions[t] === null)
+            //     {
+            //         continue;
+            //     }
+ 
+            //     var color = 'rgba(0,255,0,0.3)';
+ 
+            //     if (this.directions[t].index !== this.safetile)
+            //     {
+            //         color = 'rgba(255,0,0,0.3)';
+            //     }
+ 
+            //     if (t === this.current)
+            //     {
+            //         color = 'rgba(255,255,255,0.3)';
+            //     }
+ 
+            //     this.game.debug.geom(new Phaser.Rectangle(this.directions[t].worldX, this.directions[t].worldY, 32, 32), color, true);
+            // }
+ 
+            // this.game.debug.geom(this.turnPoint, '#ffff00');
+ 
+        }
+ 
+    };
+ 
+    game.state.add('Game', PhaserGame, true);
+    </script>
+ <link rel="stylesheet" href="fp.css">
+</head>
+<body>
+
+  <div class="col-md-2">
+    <br>
+    <br>
+    <br>
+    <br>
+    <br>
+         <div id="mySidenav" class="sidenav">
+            <br>
+            <a href="index.html">MAZE WITH US</a>
+            <br>
+            <a href="game.html">Play the Game!</a>
+            <br>
+            <a href="beyond.html">Beyond the Game</a>
+            <br>
+            <a href="ack.html">Acknowledgements</a>
+            <br>
+            <a href="about.html">About Team GrowUp</a>
+            <br>
+         </div>
+  </div>
+  <div class="text-center col-md-12">
+         <h1></h1>
+         <p></p>
+      </div>
+ 
+    <h1> <div style = "background-color: white;padding:15px;">Play Maze With Us!</div></h1>
+
+        <h2 class="w3-center"></h2>
+         <div class="col-md-3"> 
+          <h2></h2>
+          <p></p>
+         </div>
+        <div class="col-md-3"> 
+          <p> <div id='game'> </div> </p>
+         </div>
+         <div class="col-md-3"> 
+          <p> <div id='game'> </div> </p>
+         </div>
+      <div class="col-md-3"> 
+        <h2>How to Play</h2>
+          <p> 1.Use the arrow keys to move up/down/left/right.</p>
+            <p> 2. Try to avoid obstacles in the maze!</p>
+                 <p> 3. Each level completes once you get to the bottom right corner of the maze.</p>
+                  <p> 4. After you successfully complete each level, Alexa will grow a few years!</p>
+                  <p> 5. Refresh the page to play again :)</p>
+
+                  <br>
+
+     </body>
+     </html>
+       
